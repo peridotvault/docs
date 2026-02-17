@@ -1,7 +1,7 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "PeridotVault Docs",
   "colors": {
     "primary": "#16A34A",
     "light": "#07C983",
@@ -11,112 +11,123 @@
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Overview",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
+            "icon": "rocket",
             "pages": [
               "index",
-              "quickstart",
-              "development"
+              "docs/get-started/what-is-peridotvault",
+              "docs/get-started/the-problem",
+              "docs/get-started/vision-and-mission"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Novelty & Community",
+            "icon": "certificate",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "docs/nnc/novelty",
+              "docs/nnc/community"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Market Context",
+            "icon": "chart-simple",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "docs/market-context/competitive-landscape",
+              "docs/market-context/why-peridot"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Economics",
+            "icon": "chart-pie",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "docs/economics/revenue-model",
+              "docs/economics/payment-model",
+              "docs/economics/license-model"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "For Developers",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Getting Started",
+            "icon": "github-alt",
             "pages": [
-              "api-reference/introduction"
+              "dev/getting-started/welcome",
+              "dev/getting-started/publishing-flow",
+              "dev/getting-started/revenue-share"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Game Licensing",
+            "icon": "award",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "dev/game-licensing/license-smart-contract",
+              "dev/game-licensing/subscription-model",
+              "dev/game-licensing/nft-integration"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Architecture",
+        "groups": [
+          {
+            "group": "Core Infrastructure",
+            "icon": "landmark",
+            "pages": [
+              "architecture/core/distribution-layer",
+              "architecture/core/license-layer",
+              "architecture/core/identity-layer"
+            ]
+          },
+          {
+            "group": "System Design",
+            "icon": "boxes-stacked",
+            "pages": [
+              "architecture/system-design/storage-architecture",
+              "architecture/system-design/offchain-services",
+              "architecture/system-design/smart-contracts"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
+    ]
   },
   "logo": {
-    "light": "/logo/light.svg",
+    "light": "/logo/dark.svg",
     "dark": "/logo/dark.svg"
   },
   "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
     "primary": {
       "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
+      "label": "Try Web Version",
+      "href": "https://peridotvault.com"
     }
   },
   "contextual": {
     "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
+      "copy",
+      "view",
+      "chatgpt",
+      "claude",
+      "perplexity",
+      "mcp",
+      "cursor",
+      "vscode"
+    ]
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "x": "https://x.com/peridotvault",
+      "instagram": "https://www.instagram.com/peridotvault/",
+      "github": "https://github.com/peridotvault",
+      "telegram": "https://t.me/peridotvault",
+      "linkedin": "https://www.linkedin.com/company/peridotvault"
     }
   }
 }
