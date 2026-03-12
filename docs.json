@@ -58,8 +58,20 @@
             "icon": "github-alt",
             "pages": [
               "dev/getting-started/welcome",
-              "dev/getting-started/publishing-flow",
               "dev/getting-started/revenue-share"
+            ]
+          },
+          {
+            "group": "Publishing",
+            "icon": "puzzle-piece",
+            "pages": [
+              "dev/publishing/overview",
+              "dev/publishing/1-connect-to-studio",
+              "dev/publishing/2-basic-info",
+              "dev/publishing/3-media-assets",
+              "dev/publishing/4-build-upload",
+              "dev/publishing/5-onchain-publishing",
+              "dev/publishing/6-review-and-publish"
             ]
           },
           {

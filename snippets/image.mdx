@@ -1,3 +1,13 @@
-export const Image = ({ src }) => (
-  <img src={src} style={{ borderRadius: 30 }} />
+export const Image = ({ src, alt }) => (
+  <img
+    src={src}
+    style={{
+      borderRadius: 30,
+      maxHeight: 500,
+      objectFit: "cover",
+      width: "100%",
+      objectPosition: "top",
+    }}
+    alt={alt}
+  />
 );
