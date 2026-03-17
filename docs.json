@@ -80,7 +80,9 @@
             "pages": [
               "dev/game-licensing/license-smart-contract",
               "dev/game-licensing/pgc1",
-              "dev/game-licensing/store-contract",
+              "dev/game-licensing/store",
+              "dev/game-licensing/registry",
+              "dev/game-licensing/factory",
               "dev/game-licensing/subscription-model",
               "dev/game-licensing/nft-integration"
             ]

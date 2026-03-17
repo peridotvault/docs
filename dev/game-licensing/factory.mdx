@@ -1,0 +1,44 @@
+---
+title: "Factory"
+description: "Deploys PGC-1 contracts per game."
+---
+
+## Overview
+
+Factory deploys license contracts (PGC-1).
+
+Each game can have its own contract.
+
+---
+
+## Data Model
+
+```
+type GameContract = {
+  gameId: string
+  contractAddress: address
+}
+```
+
+---
+
+## Functions
+
+### deployGameContract
+
+function deployGameContract(gameId: string)
+
+- Only publisher
+
+---
+
+### getGameContract
+
+function getGameContract(gameId: string): address
+
+---
+
+## Rules
+
+- One contract per game (recommended)
+- Mapping should not be overwritten once set

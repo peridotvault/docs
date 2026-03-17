@@ -1,0 +1,70 @@
+---
+title: "Registry"
+description: "Canonical contract for game registration and governance."
+---
+
+## Overview
+
+Registry is the source of truth for all games in PeridotVault.
+
+Responsibilities:
+
+- Store game metadata
+- Manage publishers
+- Handle governance (approve / ban)
+
+Registry does NOT handle payments or minting.
+
+---
+
+## Data Model
+
+```
+type Game = {
+  gameId: string
+  publisher: address
+  metadataURI: string
+  status: number // 0 = pending, 1 = approved, 2 = banned
+}
+```
+
+---
+
+## Functions
+
+### registerGame
+
+function registerGame(gameId: string, metadataURI: string)
+
+- Registers a new game
+- Requires publishing fee
+
+---
+
+### updateMetadata
+
+function updateMetadata(gameId: string, metadataURI: string)
+
+- Only publisher can update
+
+---
+
+### setStatus
+
+function setStatus(gameId: string, status: number)
+
+- Only governance
+- Used for approve / ban
+
+---
+
+### getGame
+
+function getGame(gameId: string): Game
+
+---
+
+## Rules
+
+- Only `approved` games can be sold
+- `banned` games are disabled across system
