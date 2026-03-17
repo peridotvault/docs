@@ -1,0 +1,99 @@
+---
+title: "Peridot Store"
+description: "A contract responsible for listing games, handling payments, and minting PGC-1 licenses."
+---
+
+## Introduction
+
+Peridot Store is a smart contract responsible for handling all purchase and monetization logic within the PeridotVault ecosystem.
+
+It acts as a commerce layer that processes payments and mints PGC-1 licenses to users.
+
+The Store does NOT manage ownership or access directly.
+
+---
+
+## 🧩 Responsibilities
+
+Peridot Store is responsible for:
+
+- Processing game purchases
+- Handling subscription payments
+- Applying platform fees
+- Distributing revenue to publishers
+- Minting PGC-1 licenses
+
+---
+
+## 🔗 Integration
+
+### With PGC-1
+
+- Calls `mintLicense()` after successful payment
+
+### With Registry
+
+- Reads game data (price, publisher, metadata)
+
+---
+
+## ⚙️ Functions
+
+### Purchase
+
+- `purchase(gameId)`
+
+Flow:
+
+1. User sends payment
+2. Store validates game
+3. Store processes fee
+4. Store calls `mintLicense()` on PGC-1
+
+---
+
+### Subscription (Optional)
+
+- `subscribe(gameId, duration)`
+
+---
+
+### Pricing
+
+- `getGamePrice(gameId)`
+
+---
+
+## 💰 Fee Model
+
+- Platform takes a percentage fee from each transaction
+- Remaining amount is sent to publisher
+
+---
+
+## 🔐 Access Control
+
+- Only Store is allowed to mint licenses via PGC-1
+- Users cannot mint licenses directly
+
+---
+
+## 🚫 Non-Responsibilities
+
+Peridot Store does NOT:
+
+- Store game metadata
+- Manage game listing
+- Control access to games
+- Handle license validation
+
+---
+
+## 🧠 Design Principles
+
+- Separation of concerns
+- Minimal logic
+- Extensible monetization
+- Chain-agnostic
+
+---

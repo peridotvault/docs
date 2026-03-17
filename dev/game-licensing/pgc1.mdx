@@ -1,0 +1,108 @@
+---
+title: "PGC-1"
+description: "A cross-chain standard for representing game ownership and access rights through non-transferable programmable licenses."
+---
+
+import { LastUpdated } from "/snippets/last-updated.mdx";
+
+<LastUpdated date="17/03/2026" />
+
+---
+
+## Introduction
+
+PGC-1 (Peridot Game Contract) is a cross-chain standard designed to represent game ownership and access rights through non-transferable licenses.
+
+Unlike traditional NFT standards (e.g., ERC-721 / ERC-1155), PGC-1 introduces a license-based model, where each token represents a non-transferable entitlement to access a specific game or digital content.
+
+PGC-1 is designed to:
+
+- Enable true ownership of game licenses
+- Provide programmable access control (entitlements)
+- Support multiple monetization models (purchase, subscription, bundles)
+- Remain chain-agnostic (EVM, Solana, etc.)
+
+---
+
+## 🔐 License Policy
+
+| Field     | Type     | Description                      |
+| --------- | -------- | -------------------------------- |
+| issuedAt  | `uint64` | Timestamp when license is minted |
+| expiresAt | `uint64` | Expiration timestamp (optional)  |
+
+---
+
+## 📄 Token Metadata
+
+| Field       | Type      | Description                   |
+| ----------- | --------- | ----------------------------- |
+| gameId      | `string`  | Unique identifier of the game |
+| publisher   | `address` | Publisher wallet address      |
+| metadataURI | `string`  | URI pointing to full metadata |
+
+---
+
+## ⚙️ Functions
+
+### Ownership & Access
+
+- `hasLicense(user, gameId) -> bool`, Returns whether a user owns any valid license for a game.
+- `canAccessGame(user, gameId) -> bool`, Returns true if user has a valid (non-expired) license.
+
+### Minting
+
+- `mintLicense(to, gameId, expiresAt)`, Grants a license to a user.
+
+  <Warning>
+    MUST be restricted to authorized contracts (e.g., Store or Publisher). MUST
+    NOT be callable by arbitrary users.
+  </Warning>
+  Behavior:
+
+  | expiresAt Value | Meaning           |
+  | --------------- | ----------------- |
+  | 0               | permanent license |
+  | > now           | temporary         |
+  | < now           | expired (invalid) |
+
+### Access Control
+
+PGC-1 uses an authorized minter model.
+
+Only approved contracts or accounts are allowed to mint licenses.
+
+- `setMinter(address, bool)`, manages authorized minters
+  <Tip>
+    Authorized minters may include: Peridot Store contract and Game publishers
+    (for giveaways, testing, or promotions)
+  </Tip>
+  <Warning>End users MUST NOT be able to mint licenses directly.</Warning>
+
+---
+
+## 🚫 Transferability
+
+PGC-1 licenses are strictly non-transferable.
+
+Implementations MUST ensure:
+
+- Licenses cannot be transferred between users
+- Any transfer attempt MUST fail
+
+---
+
+## 🌐 Chain Support
+
+PGC-1 is designed to be chain-agnostic.
+
+#### EVM
+
+- Built on top of [ERC-1155](https://ethereum.org/developers/docs/standards/tokens/erc-1155/)
+- Extended with license logic
+
+#### Solana
+
+- Implemented using [Token-2022](https://www.solana-program.com/docs/token-wrap)
+
+- Extensions: **NonTransferable**, **Metadata Pointer**
