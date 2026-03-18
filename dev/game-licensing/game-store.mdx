@@ -1,0 +1,407 @@
+---
+title: "Game Store"
+description: "Handles payments and license minting for PGC-1."
+---
+
+import { LastUpdated } from "/snippets/last-updated.mdx";
+
+<LastUpdated date="18/03/2026" />
+
+---
+
+## Overview
+
+Game Store is the execution layer for purchasing games.
+
+Responsibilities:
+
+- Validate game from Registry
+- Process payment
+- Mint license via [PGC-1](/dev/game-licensing/pgc1)
+
+Game Store does NOT store metadata or governance logic.
+
+---
+
+## Dependencies
+
+| Component                         | Purpose                       |
+| --------------------------------- | ----------------------------- |
+| [PGC-1](/dev/game-licensing/pgc1) | License minting               |
+| Registry                          | Source of truth for game data |
+| Treasury                          | Platform fee receiver         |
+
+---
+
+## Data Structures
+
+### PriceConfig
+
+| Field       | Type    | Description           |
+| ----------- | ------- | --------------------- |
+| price       | uint256 | Base price            |
+| currency    | address | Payment token address |
+| discountBps | uint16  | Discount in bps       |
+
+---
+
+## State
+
+| Variable          | Type                                            | Description                  |
+| ----------------- | ----------------------------------------------- | ---------------------------- |
+| registry          | address                                         | Address of Registry contract |
+| governance        | address                                         | Governance Role              |
+| treasury          | address                                         | Platform fee receiver        |
+| prices            | mapping(string => PriceConfig)                  | Game pricing                 |
+| platformFeeBps    | uint16                                          | Platform fee (basis points)  |
+| publisherBalances | mapping(address => mapping(address => uint256)) | Publisher earnings per token |
+
+---
+
+## Functions
+
+### 1. setPrice
+
+Sets base price for a game.
+
+`function setPrice(gameId, price, currency)`
+
+#### Params
+
+| Name     | Type    | Description     |
+| -------- | ------- | --------------- |
+| gameId   | string  | Game identifier |
+| price    | uint256 | Base price      |
+| currency | address | Payment token   |
+
+#### Rules
+
+- Only publisher
+- msg.sender MUST match `PGC1(contractAddress).getPublisher()`
+- `currency` MUST be a valid supported payment token
+- Game MUST exist in Registry
+- `price` MAY be 0 for free games
+
+### 2. setDiscount
+
+Sets discount in basis points.
+
+`function setDiscount(gameId, discountBps)`
+
+#### Params
+
+| Name        | Type   | Description                |
+| ----------- | ------ | -------------------------- |
+| gameId      | string | Game identifier            |
+| discountBps | uint16 | Discount (e.g. 1000 = 10%) |
+
+#### Rules
+
+- Only publisher
+- msg.sender MUST match `PGC1(contractAddress).getPublisher()`
+- `discountBps` MUST be `<=` 10000
+
+### 3. getFinalPrice
+
+Returns final price after discount.
+
+`function getFinalPrice(gameId): uint256`
+
+#### Returns
+
+| Type    | Description |
+| ------- | ----------- |
+| uint256 | Final price |
+
+#### Logic
+
+finalPrice = price - (price \* discountBps / 10000)
+
+### 4. buyGame
+
+Executes purchase and mints license.
+
+`function buyGame(gameId)`
+
+#### Flow
+
+1. Fetch game from Registry
+2. Validate `status == approved`
+3. Validate `game.contractAddress` exists
+4. Get PGC-1 contract
+5. Get publisher:
+   - `publisher = PGC1.getPublisher()`
+6. Load `PriceConfig`
+   - `currency = prices[gameId].currency`
+7. Calculate `finalPrice`
+8. Validate payment token and amount
+9. Prevent duplicate purchase by checking `PGC1.canAccessGame(msg.sender)`
+10. Calculate:
+    - `platformFee`
+    - `publisherRevenue`
+11. Receive payment
+12. Process split:
+    - `transfer(platformFee → treasury)`
+    - `publisherBalances[publisher][currency] += publisherRevenue`
+13. Call `PGC1.mintLicense(msg.sender, 0)`
+14. Revert whole transaction if mint fails
+
+#### Internal Calls
+
+- `const game = Registry.getGame(gameId)`
+- `const finalPrice = getFinalPrice(gameId)`
+- `PGC1(game.contractAddress).mintLicense(msg.sender, 0)`
+- `publisherBalances[publisher][currency] += publisherRevenue`
+
+#### Rules
+
+- If `finalPrice == 0`, payment transfer MAY be skipped
+- Game **MUST** have a valid PriceConfig before purchase **(Including Free Game)**
+- Purchase, accounting update, and minting MUST be executed atomically
+- Mint **MUST** only happen AFTER payment is recorded
+- If mint fails → transaction **MUST** revert
+- Double purchase **MUST** be prevented if the buyer already owns a valid license for the same game.
+
+### 5. setPlatformFee
+
+Updates platform fee.
+
+`function setPlatformFee(feeBps)`
+
+#### Params
+
+| Name   | Type   | Description         |
+| ------ | ------ | ------------------- |
+| feeBps | uint16 | Fee in basis points |
+
+#### Rules
+
+- Only governance
+- `feeBps` MUST be `<=` 10000
+
+### 6. withdraw
+
+Withdraw publisher earnings per token.
+
+`function withdraw(token)`
+
+#### Params
+
+| Name  | Type    | Description   |
+| ----- | ------- | ------------- |
+| token | address | Token address |
+
+#### Rules
+
+- Only publisher
+- Balance MUST be > 0
+- Withdrawal MUST revert if transfer fails
+
+#### Behavior
+
+- `amount = publisherBalances[msg.sender][token]`
+- `publisherBalances[msg.sender][token] = 0`
+- `transfer(token → msg.sender)`
+
+### 7. setGovernance
+
+Updates governance address.
+
+`function setGovernance(governance)`
+
+#### Params
+
+| Name       | Type    | Description            |
+| ---------- | ------- | ---------------------- |
+| governance | address | New governance address |
+
+#### Rules
+
+- Only current governance
+- Governance MUST NOT be zero address
+- Event SHOULD be emitted
+
+### 8. setTreasury
+
+Updates treasury receiver address.
+
+`function setTreasury(treasury)`
+
+#### Params
+
+| Name     | Type    | Description           |
+| -------- | ------- | --------------------- |
+| treasury | address | New treasury receiver |
+
+#### Rules
+
+- Only governance
+- Treasury MUST NOT be zero address
+- Event SHOULD be emitted
+
+### 9. getPriceConfig
+
+Returns pricing configuration for a game.
+
+`function getPriceConfig(gameId)`
+
+#### Params
+
+| Name   | Type   | Description     |
+| ------ | ------ | --------------- |
+| gameId | string | Game identifier |
+
+#### Returns
+
+| Name        | Type    | Description           |
+| ----------- | ------- | --------------------- |
+| price       | uint256 | Base price            |
+| currency    | address | Payment token address |
+| discountBps | uint16  | Discount in bps       |
+
+### 10. getPublisherBalance
+
+Returns withdrawable publisher balance for a token.
+
+`function getPublisherBalance(publisher, token)`
+
+#### Params
+
+| Name      | Type    | Description       |
+| --------- | ------- | ----------------- |
+| publisher | address | Publisher address |
+| token     | address | Token address     |
+
+#### Returns
+
+| Type    | Description                |
+| ------- | -------------------------- |
+| uint256 | Withdrawable token balance |
+
+### 11. getPlatformFee
+
+Returns current platform fee in basis points.
+
+`function getPlatformFee()`
+
+#### Returns
+
+| Type   | Description                  |
+| ------ | ---------------------------- |
+| uint16 | Platform fee in basis points |
+
+### 12. getTreasury
+
+Returns treasury receiver address.
+
+`function getTreasury()`
+
+#### Returns
+
+| Type    | Description               |
+| ------- | ------------------------- |
+| address | Treasury receiver address |
+
+### 13. getGovernance
+
+Returns governance address.
+
+`function getGovernance()`
+
+#### Returns
+
+| Type    | Description        |
+| ------- | ------------------ |
+| address | Governance address |
+
+### 14. getRegistry
+
+Returns registry contract address.
+
+`function getRegistry()`
+
+#### Returns
+
+| Type    | Description      |
+| ------- | ---------------- |
+| address | Registry address |
+
+---
+
+## Payment Flow
+
+**Hybrid (Push + Escrow)** Payments are split during purchase:
+
+- Platform fee → sent directly to treasury
+- Publisher revenue → stored in contract (escrow)
+
+---
+
+### Flow
+
+1. User pays `finalPrice`
+2. Contract calculates:
+   - platformFee
+   - publisherRevenue
+3. Execute transfers:
+   - send platform fee to treasury
+   - `publisherBalances[publisher][currency] += publisherRevenue`
+4. Mint license
+
+### Withdraw
+
+- Publisher MUST call `withdraw(token)` to claim revenue
+- Treasury does NOT use withdraw, because platform fee is transferred directly during purchase
+
+---
+
+## Revenue Split
+
+| Component        | Formula                              |
+| ---------------- | ------------------------------------ |
+| platformFee      | finalPrice \* platformFeeBps / 10000 |
+| publisherRevenue | finalPrice - platformFee             |
+
+---
+
+## Access Control
+
+| Function            | Access     |
+| ------------------- | ---------- |
+| setPrice            | Publisher  |
+| setDiscount         | Publisher  |
+| withdraw            | Publisher  |
+| getFinalPrice       | Public     |
+| buyGame             | Public     |
+| setPlatformFee      | Governance |
+| setGovernance       | Governance |
+| setTreasury         | Governance |
+| getPriceConfig      | Public     |
+| getPublisherBalance | Public     |
+| getPlatformFee      | Public     |
+| getTreasury         | Public     |
+| getGovernance       | Public     |
+| getRegistry         | Public     |
+
+---
+
+## Requirements
+
+- Game MUST be `approved` in Registry
+- Registry MUST return a valid `contractAddress`
+- Registry MUST return game status
+- Store MUST be authorized minter in PGC-1
+- PGC-1 MUST implement `getPublisher()`
+- PGC-1 MUST implement `canAccessGame(user)`
+- PGC-1 MUST implement `mintLicense(to, expiresAt)`
+- Payment MUST succeed before mint
+
+---
+
+## Notes
+
+- Price is dynamic (not stored in Registry)
+- Supports future extensions:
+  - subscription
+  - bundle
+  - regional pricing

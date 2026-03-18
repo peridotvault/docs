@@ -5,104 +5,399 @@ description: "A cross-chain standard for representing game ownership and access 
 
 import { LastUpdated } from "/snippets/last-updated.mdx";
 
-<LastUpdated date="17/03/2026" />
+<LastUpdated date="18/03/2026" />
 
 ---
 
-## Introduction
+## Overview
 
-PGC-1 (Peridot Game Contract) is a cross-chain standard designed to represent game ownership and access rights through non-transferable licenses.
+PGC-1 is the ownership and access layer for a single game in Peridot.
 
-Unlike traditional NFT standards (e.g., ERC-721 / ERC-1155), PGC-1 introduces a license-based model, where each token represents a non-transferable entitlement to access a specific game or digital content.
+Responsibilities:
 
-PGC-1 is designed to:
+- Store canonical `gameId`
+- Store canonical publisher address
+- Store canonical metadata URI
+- Mint non-transferable licenses
+- Provide entitlement and access checks
+- Manage authorized minters
+- Preserve the strongest valid entitlement for each user
 
-- Enable true ownership of game licenses
-- Provide programmable access control (entitlements)
-- Support multiple monetization models (purchase, subscription, bundles)
-- Remain chain-agnostic (EVM, Solana, etc.)
-
----
-
-## 🔐 License Policy
-
-| Field     | Type     | Description                      |
-| --------- | -------- | -------------------------------- |
-| issuedAt  | `uint64` | Timestamp when license is minted |
-| expiresAt | `uint64` | Expiration timestamp (optional)  |
+PGC-1 does NOT handle pricing, payments, moderation, catalog listing, or publisher-wide subscriptions.
 
 ---
 
-## 📄 Token Metadata
+## Data Structures
 
-| Field       | Type      | Description                   |
-| ----------- | --------- | ----------------------------- |
-| gameId      | `string`  | Unique identifier of the game |
-| publisher   | `address` | Publisher wallet address      |
-| metadataURI | `string`  | URI pointing to full metadata |
+### LicensePolicy
 
----
+| Field     | Type   | Description                      |
+| --------- | ------ | -------------------------------- |
+| issuedAt  | uint64 | Timestamp when license is minted |
+| expiresAt | uint64 | Expiration timestamp             |
 
-## ⚙️ Functions
+#### Rules
 
-### Ownership & Access
-
-- `hasLicense(user, gameId) -> bool`, Returns whether a user owns any valid license for a game.
-- `canAccessGame(user, gameId) -> bool`, Returns true if user has a valid (non-expired) license.
-
-### Minting
-
-- `mintLicense(to, gameId, expiresAt)`, Grants a license to a user.
-
-  <Warning>
-    MUST be restricted to authorized contracts (e.g., Store or Publisher). MUST
-    NOT be callable by arbitrary users.
-  </Warning>
-  Behavior:
-
-  | expiresAt Value | Meaning           |
-  | --------------- | ----------------- |
-  | 0               | permanent license |
-  | > now           | temporary         |
-  | < now           | expired (invalid) |
-
-### Access Control
-
-PGC-1 uses an authorized minter model.
-
-Only approved contracts or accounts are allowed to mint licenses.
-
-- `setMinter(address, bool)`, manages authorized minters
-  <Tip>
-    Authorized minters may include: Peridot Store contract and Game publishers
-    (for giveaways, testing, or promotions)
-  </Tip>
-  <Warning>End users MUST NOT be able to mint licenses directly.</Warning>
+- `expiresAt = 0` means permanent license
+- `expiresAt > now` means temporary valid license
+- `expiresAt < now` means expired license
 
 ---
 
-## 🚫 Transferability
+## State
+
+| Variable    | Type                              | Description                     |
+| ----------- | --------------------------------- | ------------------------------- |
+| gameId      | string                            | Canonical game identifier       |
+| publisher   | address                           | Canonical publisher address     |
+| metadataURI | string                            | Canonical metadata URI          |
+| minters     | mapping(address => bool)          | Authorized minters              |
+| licenses    | mapping(address => LicensePolicy) | User license policy per account |
+
+---
+
+## Functions
+
+### 1. mintLicense
+
+Grants or upgrades a license for a user.
+
+`function mintLicense(to, expiresAt)`
+
+#### Params
+
+| Name      | Type    | Description                  |
+| --------- | ------- | ---------------------------- |
+| to        | address | Receiver address             |
+| expiresAt | uint64  | License expiration timestamp |
+
+#### Rules
+
+- Only authorized minter
+- `to` MUST NOT be zero address
+- Permanent license MUST NOT be downgraded by a temporary license
+- The strongest valid entitlement MUST be preserved
+
+#### Behavior
+
+If the user has no license:
+
+- create new license
+
+If the user has an expired license:
+
+- replace with incoming license
+
+If the user has a temporary license and incoming license is permanent:
+
+- upgrade to permanent
+
+If the user has a permanent license and incoming license is temporary:
+
+- keep permanent license
+- incoming temporary license MUST NOT downgrade access
+
+If the user has a temporary license and incoming temporary license expires later:
+
+- extend or replace with later expiry
+
+If the user has a temporary license and incoming temporary license expires earlier:
+
+- keep current license
+
+#### Notes
+
+- This function is game-specific
+- Publisher-wide subscription or pass-based access SHOULD be handled by a separate access layer or contract
+
+---
+
+### 2. hasLicense
+
+Returns whether a user owns a valid license for this game.
+
+`function hasLicense(user)`
+
+#### Params
+
+| Name | Type    | Description  |
+| ---- | ------- | ------------ |
+| user | address | User address |
+
+#### Returns
+
+| Type | Description                       |
+| ---- | --------------------------------- |
+| bool | True if user owns a valid license |
+
+#### Rules
+
+- Expired licenses MUST return `false`
+
+---
+
+### 3. canAccessGame
+
+Returns whether a user can currently access this game.
+
+`function canAccessGame(user)`
+
+#### Params
+
+| Name | Type    | Description  |
+| ---- | ------- | ------------ |
+| user | address | User address |
+
+#### Returns
+
+| Type | Description                                  |
+| ---- | -------------------------------------------- |
+| bool | True if user has a valid non-expired license |
+
+#### Rules
+
+- Expired licenses MUST return `false`
+
+#### Notes
+
+- This function is suitable as an entitlement check for launcher access, download authorization, and future DRM-like enforcement
+- This function alone is NOT a complete DRM system
+- A stronger DRM system MAY combine this entitlement check with launcher verification, encrypted delivery, or signed access tokens
+
+---
+
+### 4. getLicensePolicy
+
+Returns license policy data for a user.
+
+`function getLicensePolicy(user)`
+
+#### Params
+
+| Name | Type    | Description  |
+| ---- | ------- | ------------ |
+| user | address | User address |
+
+#### Returns
+
+| Name      | Type   | Description                       |
+| --------- | ------ | --------------------------------- |
+| issuedAt  | uint64 | Timestamp when license was minted |
+| expiresAt | uint64 | Expiration timestamp              |
+
+---
+
+### 5. setMinter
+
+Updates minter authorization.
+
+`function setMinter(account, isAuthorized)`
+
+#### Params
+
+| Name         | Type    | Description          |
+| ------------ | ------- | -------------------- |
+| account      | address | Minter address       |
+| isAuthorized | bool    | Authorization status |
+
+#### Rules
+
+- Only publisher
+- `account` MUST NOT be zero address
+- Event SHOULD be emitted
+
+#### Notes
+
+- `isAuthorized = true` grants minting access
+- `isAuthorized = false` removes minting access
+
+---
+
+### 6. isMinter
+
+Returns whether an account is an authorized minter.
+
+`function isMinter(account)`
+
+#### Params
+
+| Name    | Type    | Description     |
+| ------- | ------- | --------------- |
+| account | address | Account address |
+
+#### Returns
+
+| Type | Description              |
+| ---- | ------------------------ |
+| bool | Authorized minter status |
+
+---
+
+### 7. getPublisher
+
+Returns canonical publisher address.
+
+`function getPublisher()`
+
+#### Returns
+
+| Type    | Description       |
+| ------- | ----------------- |
+| address | Publisher address |
+
+---
+
+### 8. getMetadataURI
+
+Returns canonical metadata URI.
+
+`function getMetadataURI()`
+
+#### Returns
+
+| Type   | Description  |
+| ------ | ------------ |
+| string | Metadata URI |
+
+---
+
+### 9. getGameId
+
+Returns canonical game identifier.
+
+`function getGameId()`
+
+#### Returns
+
+| Type   | Description     |
+| ------ | --------------- |
+| string | Game identifier |
+
+---
+
+### 10. setPublisher
+
+Updates publisher address.
+
+`function setPublisher(publisher)`
+
+#### Params
+
+| Name      | Type    | Description           |
+| --------- | ------- | --------------------- |
+| publisher | address | New publisher address |
+
+#### Rules
+
+- Only current publisher
+- `publisher` MUST NOT be zero address
+- Event SHOULD be emitted
+
+#### Notes
+
+- This function is optional if publisher is intended to be immutable in a specific implementation
+
+---
+
+### 11. setMetadataURI
+
+Updates metadata URI.
+
+`function setMetadataURI(metadataURI)`
+
+#### Params
+
+| Name        | Type   | Description      |
+| ----------- | ------ | ---------------- |
+| metadataURI | string | New metadata URI |
+
+#### Rules
+
+- Only publisher
+- `metadataURI` MUST NOT be empty
+- Event SHOULD be emitted
+
+#### Notes
+
+- This function is optional if metadata is intended to be immutable in a specific implementation
+
+---
+
+## Access Control
+
+| Function         | Access            |
+| ---------------- | ----------------- |
+| mintLicense      | Authorized Minter |
+| hasLicense       | Public            |
+| canAccessGame    | Public            |
+| getLicensePolicy | Public            |
+| setMinter        | Publisher         |
+| isMinter         | Public            |
+| getPublisher     | Public            |
+| getMetadataURI   | Public            |
+| getGameId        | Public            |
+| setPublisher     | Publisher         |
+| setMetadataURI   | Publisher         |
+
+---
+
+## Requirements
+
+- `gameId` MUST be stored in PGC-1
+- `publisher` MUST be stored in PGC-1
+- `metadataURI` MUST be stored in PGC-1
+- `mintLicense()` MUST only be callable by authorized minters
+- `getPublisher()` MUST return the canonical publisher for the game
+- `getMetadataURI()` MUST return the canonical metadata URI for the game
+- `hasLicense(user)` MUST return `false` for expired licenses
+- `canAccessGame(user)` MUST return `false` for expired licenses
+- Licenses MUST remain non-transferable
+- Permanent licenses MUST NOT be downgraded by temporary licenses
+- The strongest valid entitlement MUST be preserved for each user
+
+---
+
+## Transferability
 
 PGC-1 licenses are strictly non-transferable.
 
 Implementations MUST ensure:
 
-- Licenses cannot be transferred between users
-- Any transfer attempt MUST fail
+- licenses cannot be transferred between users
+- any transfer attempt MUST fail
 
 ---
 
-## 🌐 Chain Support
+## Subscription Compatibility
+
+PGC-1 is intended for game-specific entitlement.
+
+Publisher-wide subscriptions, game bundles, or ecosystem-wide passes SHOULD be implemented in a separate access layer or contract.
+
+Such systems MAY grant additional access, but MUST NOT invalidate or downgrade a stronger permanent game license already held by the user.
+
+---
+
+## Notes
+
+- PGC-1 is the source of truth for publisher and metadata
+- Registry is the source of truth for game validity and moderation
+- Game Store is the source of truth for pricing and purchase flow
+- PGC-1 should remain minimal and ownership-focused
+
+---
+
+## Chain Support
 
 PGC-1 is designed to be chain-agnostic.
 
-#### EVM
+### EVM
 
-- Built on top of [ERC-1155](https://ethereum.org/developers/docs/standards/tokens/erc-1155/)
+- Built on top of ERC-1155
 - Extended with license logic
+- Transfer behavior MUST be disabled or restricted
 
-#### Solana
+### Solana
 
-- Implemented using [Token-2022](https://www.solana-program.com/docs/token-wrap)
-
-- Extensions: **NonTransferable**, **Metadata Pointer**
+- Implemented using Token-2022
+- Extensions: NonTransferable, Metadata Pointer

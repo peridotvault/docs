@@ -1,70 +1,451 @@
 ---
 title: "Registry"
-description: "Canonical contract for game registration and governance."
+description: "Source of truth for game registration, game status, and PGC-1 contract mapping."
+---
+
+import { LastUpdated } from "/snippets/last-updated.mdx";
+
+<LastUpdated date="18/03/2026" />
+
 ---
 
 ## Overview
 
-Registry is the source of truth for all games in PeridotVault.
+Registry is the source of truth for game validity in Peridot.
 
 Responsibilities:
 
-- Store game metadata
-- Manage publishers
-- Handle governance (approve / ban)
+- Register games
+- Store PGC-1 contract address
+- Store game status
+- Enforce registration fee policy
+- Manage moderation and governance decisions
+- Provide game listing data for catalog and indexing
 
-Registry does NOT handle payments or minting.
+Registry does NOT store publisher, metadata, pricing, or ownership.
 
 ---
 
-## Data Model
+## Dependencies
 
-```
-type Game = {
-  gameId: string
-  publisher: address
-  metadataURI: string
-  status: number // 0 = pending, 1 = approved, 2 = banned
-}
-```
+| Component  | Purpose                          |
+| ---------- | -------------------------------- |
+| PGC-1      | Source of publisher and metadata |
+| Governance | Status control and fee policy    |
+| Treasury   | Registration fee receiver        |
+
+---
+
+## Data Structures
+
+### Game
+
+| Field           | Type    | Description            |
+| --------------- | ------- | ---------------------- |
+| gameId          | string  | Unique game identifier |
+| contractAddress | address | PGC-1 contract address |
+| status          | uint8   | Game status            |
+
+### Status
+
+| Value | Meaning  |
+| ----- | -------- |
+| 0     | Pending  |
+| 1     | Approved |
+| 2     | Banned   |
+
+---
+
+## State
+
+| Variable             | Type                     | Description                    |
+| -------------------- | ------------------------ | ------------------------------ |
+| governance           | address                  | Governance address             |
+| treasury             | address                  | Registration fee receiver      |
+| registrationFee      | uint256                  | Base registration fee          |
+| registrationFeeToken | address                  | Registration fee token address |
+| feeExemptions        | mapping(address => bool) | Free registration allowlist    |
+| admins               | mapping(address => bool) | Admin / moderator allowlist    |
+| games                | mapping(string => Game)  | Registered games               |
+| allGameIds           | string[]                 | All registered game IDs        |
 
 ---
 
 ## Functions
 
-### registerGame
+### 1. registerGame
 
-function registerGame(gameId: string, metadataURI: string)
+Registers a new game in Registry.
 
-- Registers a new game
-- Requires publishing fee
+`function registerGame(gameId, contractAddress)`
+
+#### Params
+
+| Name            | Type    | Description            |
+| --------------- | ------- | ---------------------- |
+| gameId          | string  | Unique game identifier |
+| contractAddress | address | PGC-1 contract address |
+
+#### Rules
+
+- Only publisher
+- `gameId` MUST be unique
+- `contractAddress` MUST NOT be zero address
+- Registration fee MUST be paid unless publisher is fee-exempt
+- Initial status MUST be `Pending`
+
+#### Behavior
+
+- `publisher = PGC1(contractAddress).getPublisher()`
+- `gameId` MUST match `PGC1(contractAddress).getGameId()`
+- `msg.sender` MUST equal `publisher`
+- collect registration fee if required
+- send registration fee to treasury
+- store game data
+- append `gameId` to `allGameIds`
+- set `status = Pending`
 
 ---
 
-### updateMetadata
+### 2. setStatus
 
-function updateMetadata(gameId: string, metadataURI: string)
+Updates game status.
 
-- Only publisher can update
+`function setStatus(gameId, status)`
+
+#### Params
+
+| Name   | Type   | Description     |
+| ------ | ------ | --------------- |
+| gameId | string | Game identifier |
+| status | uint8  | New status      |
+
+#### Rules
+
+- Only admin
+- Game MUST exist
+- `status` MUST be one of:
+  - `0` Pending
+  - `1` Approved
+  - `2` Banned
 
 ---
 
-### setStatus
+### 3. setAdmin
 
-function setStatus(gameId: string, status: number)
+Updates admin status for an account.
+
+`function setAdmin(account, isAdmin)`
+
+#### Params
+
+| Name    | Type    | Description   |
+| ------- | ------- | ------------- |
+| account | address | Admin address |
+| isAdmin | bool    | Admin status  |
+
+#### Rules
 
 - Only governance
-- Used for approve / ban
+- `account` MUST NOT be zero address
+- Event SHOULD be emitted
 
 ---
 
-### getGame
+### 4. setGovernance
 
-function getGame(gameId: string): Game
+Updates governance address.
+
+`function setGovernance(governance)`
+
+#### Params
+
+| Name       | Type    | Description            |
+| ---------- | ------- | ---------------------- |
+| governance | address | New governance address |
+
+#### Rules
+
+- Only current governance
+- `governance` MUST NOT be zero address
+- Event SHOULD be emitted
 
 ---
 
-## Rules
+### 5. setTreasury
 
-- Only `approved` games can be sold
-- `banned` games are disabled across system
+Updates treasury receiver address.
+
+`function setTreasury(treasury)`
+
+#### Params
+
+| Name     | Type    | Description           |
+| -------- | ------- | --------------------- |
+| treasury | address | New treasury receiver |
+
+#### Rules
+
+- Only governance
+- `treasury` MUST NOT be zero address
+- Event SHOULD be emitted
+
+---
+
+### 6. setRegistrationFee
+
+Updates registration fee configuration.
+
+`function setRegistrationFee(amount, token)`
+
+#### Params
+
+| Name   | Type    | Description                    |
+| ------ | ------- | ------------------------------ |
+| amount | uint256 | Registration fee amount        |
+| token  | address | Registration fee token address |
+
+#### Rules
+
+- Only governance
+- `token` MUST be a valid supported payment token
+- Event SHOULD be emitted
+
+---
+
+### 7. setFeeExemption
+
+Updates fee exemption status for a publisher or studio.
+
+`function setFeeExemption(account, isExempt)`
+
+#### Params
+
+| Name     | Type    | Description                 |
+| -------- | ------- | --------------------------- |
+| account  | address | Publisher or studio address |
+| isExempt | bool    | Exemption status            |
+
+#### Rules
+
+- Only governance
+- `account` MUST NOT be zero address
+- Event SHOULD be emitted
+
+#### Notes
+
+- `isExempt = true` grants free registration
+- `isExempt = false` removes free registration access
+
+---
+
+### 8. getGame
+
+Returns full game data.
+
+`function getGame(gameId)`
+
+#### Params
+
+| Name   | Type   | Description     |
+| ------ | ------ | --------------- |
+| gameId | string | Game identifier |
+
+#### Returns
+
+| Name            | Type    | Description            |
+| --------------- | ------- | ---------------------- |
+| gameId          | string  | Game identifier        |
+| contractAddress | address | PGC-1 contract address |
+| status          | uint8   | Current status         |
+
+---
+
+### 9. getAllGames
+
+Returns all registered games.
+
+`function getAllGames()`
+
+#### Returns
+
+| Type   | Description              |
+| ------ | ------------------------ |
+| Game[] | All registered game data |
+
+#### Notes
+
+- Recommended for early-stage use
+- For large scale deployments, off-chain indexing is recommended
+
+---
+
+### 10. getContractAddress
+
+Returns PGC-1 contract address for a game.
+
+`function getContractAddress(gameId)`
+
+#### Params
+
+| Name   | Type   | Description     |
+| ------ | ------ | --------------- |
+| gameId | string | Game identifier |
+
+#### Returns
+
+| Type    | Description            |
+| ------- | ---------------------- |
+| address | PGC-1 contract address |
+
+---
+
+### 11. getStatus
+
+Returns current game status.
+
+`function getStatus(gameId)`
+
+#### Params
+
+| Name   | Type   | Description     |
+| ------ | ------ | --------------- |
+| gameId | string | Game identifier |
+
+#### Returns
+
+| Type  | Description |
+| ----- | ----------- |
+| uint8 | Game status |
+
+---
+
+### 12. getGovernance
+
+Returns governance address.
+
+`function getGovernance()`
+
+#### Returns
+
+| Type    | Description        |
+| ------- | ------------------ |
+| address | Governance address |
+
+---
+
+### 13. getTreasury
+
+Returns treasury receiver address.
+
+`function getTreasury()`
+
+#### Returns
+
+| Type    | Description               |
+| ------- | ------------------------- |
+| address | Treasury receiver address |
+
+---
+
+### 14. getRegistrationFee
+
+Returns current registration fee configuration.
+
+`function getRegistrationFee()`
+
+#### Returns
+
+| Name   | Type    | Description                    |
+| ------ | ------- | ------------------------------ |
+| amount | uint256 | Registration fee amount        |
+| token  | address | Registration fee token address |
+
+---
+
+### 15. isFeeExempt
+
+Returns whether an account is exempt from registration fee.
+
+`function isFeeExempt(account)`
+
+#### Params
+
+| Name    | Type    | Description                 |
+| ------- | ------- | --------------------------- |
+| account | address | Publisher or studio address |
+
+#### Returns
+
+| Type | Description                |
+| ---- | -------------------------- |
+| bool | Registration fee exemption |
+
+---
+
+### 16. isAdmin
+
+Returns whether an account has admin access.
+
+`function isAdmin(account)`
+
+#### Params
+
+| Name    | Type    | Description     |
+| ------- | ------- | --------------- |
+| account | address | Account address |
+
+#### Returns
+
+| Type | Description  |
+| ---- | ------------ |
+| bool | Admin status |
+
+---
+
+## Access Control
+
+| Function           | Access     |
+| ------------------ | ---------- |
+| registerGame       | Publisher  |
+| setStatus          | Admin      |
+| setAdmin           | Governance |
+| setGovernance      | Governance |
+| setTreasury        | Governance |
+| setRegistrationFee | Governance |
+| setFeeExemption    | Governance |
+| getGame            | Public     |
+| getAllGames        | Public     |
+| getContractAddress | Public     |
+| getStatus          | Public     |
+| getGovernance      | Public     |
+| getTreasury        | Public     |
+| getRegistrationFee | Public     |
+| isFeeExempt        | Public     |
+| isAdmin            | Public     |
+
+---
+
+## Requirements
+
+- Every `gameId` MUST be unique
+- Every registered game MUST have a valid `contractAddress`
+- `PGC-1` MUST implement `getPublisher()`
+- `msg.sender` MUST match `PGC-1.getPublisher()` during registration
+- Banned games MUST remain queryable
+- Registry MUST act as source of truth for game validity
+- Registration fee policy MUST be enforced during registration
+- Fee exemption MUST bypass registration fee without transferring value to publisher
+
+---
+
+## Notes
+
+- Registry stores game validity, not pricing
+- Publisher and metadata belong to PGC-1
+- Pricing belongs to Game Store
+- Ownership belongs to PGC-1
+- Registry is responsible for moderation and governance decisions
+- Fee exemption is intended for grants, partnerships, and hackathon support
+- `getAllGames()` is suitable for early-stage scale
+- Large-scale catalog indexing SHOULD move to off-chain infrastructure

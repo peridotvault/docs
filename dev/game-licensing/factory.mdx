@@ -1,44 +1,240 @@
 ---
 title: "Factory"
-description: "Deploys PGC-1 contracts per game."
+description: "Deploys new PGC-1 contracts and automates initial setup for developers."
+---
+
+import { LastUpdated } from "/snippets/last-updated.mdx";
+
+<LastUpdated date="18/03/2026" />
+
 ---
 
 ## Overview
 
-Factory deploys license contracts (PGC-1).
+Factory is the developer onboarding layer for Peridot.
 
-Each game can have its own contract.
+Responsibilities:
+
+- Deploy new PGC-1 contracts
+- Initialize canonical game data
+- Authorize Game Store as minter
+- Register the game in Registry
+- Reduce manual setup for developers
+
+Factory does NOT handle pricing, payments for game purchases, moderation, or license ownership.
 
 ---
 
-## Data Model
+## Dependencies
 
-```
-type GameContract = {
-  gameId: string
-  contractAddress: address
-}
-```
+| Component  | Purpose                         |
+| ---------- | ------------------------------- |
+| PGC-1      | Game-specific license contract  |
+| Registry   | Game registration and validity  |
+| Game Store | Authorized minter for purchases |
+
+---
+
+## Data Structures
+
+### DeploymentConfig
+
+| Field       | Type   | Description            |
+| ----------- | ------ | ---------------------- |
+| gameId      | string | Unique game identifier |
+| metadataURI | string | Canonical metadata URI |
+
+---
+
+## State
+
+| Variable   | Type    | Description                 |
+| ---------- | ------- | --------------------------- |
+| registry   | address | Registry contract address   |
+| gameStore  | address | Game Store contract address |
+| governance | address | Governance address          |
 
 ---
 
 ## Functions
 
-### deployGameContract
+### 1. createGame
 
-function deployGameContract(gameId: string)
+Deploys a new PGC-1 contract and performs initial setup.
 
-- Only publisher
+`function createGame(gameId, metadataURI)`
+
+#### Params
+
+| Name        | Type   | Description            |
+| ----------- | ------ | ---------------------- |
+| gameId      | string | Unique game identifier |
+| metadataURI | string | Canonical metadata URI |
+
+#### Rules
+
+- `gameId` MUST NOT be empty
+- `metadataURI` MUST NOT be empty
+- Registry registration MUST succeed
+- Game Store authorization MUST succeed
+- Factory MUST deploy exactly one PGC-1 contract for this call
+
+#### Flow
+
+1. Deploy new PGC-1 contract
+2. Initialize:
+   - `gameId`
+   - `publisher = msg.sender`
+   - `metadataURI`
+3. Authorize `gameStore` as minter in PGC-1
+4. Register game in Registry
+5. Return deployed contract address
+
+#### Returns
+
+| Type    | Description             |
+| ------- | ----------------------- |
+| address | Deployed PGC-1 contract |
+
+#### Notes
+
+- Registration fee policy is enforced by Registry
+- If publisher is fee-exempt in Registry, registration proceeds without fee
+- Entire process SHOULD revert if any step fails
 
 ---
 
-### getGameContract
+### 2. setRegistry
 
-function getGameContract(gameId: string): address
+Updates Registry contract address.
+
+`function setRegistry(registry)`
+
+#### Params
+
+| Name     | Type    | Description                   |
+| -------- | ------- | ----------------------------- |
+| registry | address | New Registry contract address |
+
+#### Rules
+
+- Only governance
+- `registry` MUST NOT be zero address
+- Event SHOULD be emitted
 
 ---
 
-## Rules
+### 3. setGameStore
 
-- One contract per game (recommended)
-- Mapping should not be overwritten once set
+Updates Game Store contract address.
+
+`function setGameStore(gameStore)`
+
+#### Params
+
+| Name      | Type    | Description                     |
+| --------- | ------- | ------------------------------- |
+| gameStore | address | New Game Store contract address |
+
+#### Rules
+
+- Only governance
+- `gameStore` MUST NOT be zero address
+- Event SHOULD be emitted
+
+---
+
+### 4. setGovernance
+
+Updates governance address.
+
+`function setGovernance(governance)`
+
+#### Params
+
+| Name       | Type    | Description            |
+| ---------- | ------- | ---------------------- |
+| governance | address | New governance address |
+
+#### Rules
+
+- Only current governance
+- `governance` MUST NOT be zero address
+- Event SHOULD be emitted
+
+---
+
+### 5. getRegistry
+
+Returns Registry contract address.
+
+`function getRegistry()`
+
+#### Returns
+
+| Type    | Description               |
+| ------- | ------------------------- |
+| address | Registry contract address |
+
+---
+
+### 6. getGameStore
+
+Returns Game Store contract address.
+
+`function getGameStore()`
+
+#### Returns
+
+| Type    | Description                 |
+| ------- | --------------------------- |
+| address | Game Store contract address |
+
+---
+
+### 7. getGovernance
+
+Returns governance address.
+
+`function getGovernance()`
+
+#### Returns
+
+| Type    | Description        |
+| ------- | ------------------ |
+| address | Governance address |
+
+---
+
+## Access Control
+
+| Function      | Access     |
+| ------------- | ---------- |
+| createGame    | Public     |
+| setRegistry   | Governance |
+| setGameStore  | Governance |
+| setGovernance | Governance |
+| getRegistry   | Public     |
+| getGameStore  | Public     |
+| getGovernance | Public     |
+
+---
+
+## Requirements
+
+- Factory MUST deploy a valid PGC-1 contract
+- Factory MUST initialize `gameId`, `publisher`, and `metadataURI` in PGC-1
+- Factory MUST authorize Game Store as minter in PGC-1
+- Factory MUST register the deployed PGC-1 contract in Registry
+- `gameId` MUST match the canonical `gameId` stored in PGC-1
+- Entire deployment and registration flow SHOULD be atomic
+
+---
+
+## Notes
+
+- Factory is an orchestration layer, not a source of truth
+- Publisher and metadata belong to PGC-1
+- Game validity belongs to Registry
+- Pricing and purchase flow belong to Game Store
+- Factory is intended to improve developer experience and reduce manual errors
