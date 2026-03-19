@@ -18,6 +18,7 @@ Responsibilities:
 - Store canonical `gameId`
 - Store canonical publisher address
 - Store canonical metadata URI
+- Initialize canonical game state during deployment
 - Mint non-transferable licenses
 - Provide entitlement and access checks
 - Manage authorized minters
@@ -58,7 +59,44 @@ PGC-1 does NOT handle pricing, payments, moderation, catalog listing, or publish
 
 ## Functions
 
-### 1. mintLicense
+### 1. initialize
+
+Initializes canonical game state.
+
+`function initialize(gameId, publisher, metadataURI, initialMinter)`
+
+#### Params
+
+| Name          | Type    | Description                 |
+| ------------- | ------- | --------------------------- |
+| gameId        | string  | Canonical game identifier   |
+| publisher     | address | Canonical publisher address |
+| metadataURI   | string  | Canonical metadata URI      |
+| initialMinter | address | Initial authorized minter   |
+
+#### Rules
+
+- MUST only be callable once
+- `gameId` MUST NOT be empty
+- `publisher` MUST NOT be zero address
+- `metadataURI` MUST NOT be empty
+- `initialMinter` MUST NOT be zero address
+
+#### Behavior
+
+- set canonical `gameId`
+- set canonical `publisher`
+- set canonical `metadataURI`
+- authorize `initialMinter`
+
+#### Notes
+
+- On EVM implementations this MAY be represented by constructor arguments
+- On non-constructor environments this SHOULD be represented by an initialization function
+
+---
+
+### 2. mintLicense
 
 Grants or upgrades a license for a user.
 
@@ -105,14 +143,9 @@ If the user has a temporary license and incoming temporary license expires earli
 
 - keep current license
 
-#### Notes
-
-- This function is game-specific
-- Publisher-wide subscription or pass-based access SHOULD be handled by a separate access layer or contract
-
 ---
 
-### 2. hasLicense
+### 3. hasLicense
 
 Returns whether a user owns a valid license for this game.
 
@@ -136,7 +169,7 @@ Returns whether a user owns a valid license for this game.
 
 ---
 
-### 3. canAccessGame
+### 4. canAccessGame
 
 Returns whether a user can currently access this game.
 
@@ -162,11 +195,10 @@ Returns whether a user can currently access this game.
 
 - This function is suitable as an entitlement check for launcher access, download authorization, and future DRM-like enforcement
 - This function alone is NOT a complete DRM system
-- A stronger DRM system MAY combine this entitlement check with launcher verification, encrypted delivery, or signed access tokens
 
 ---
 
-### 4. getLicensePolicy
+### 5. getLicensePolicy
 
 Returns license policy data for a user.
 
@@ -187,7 +219,7 @@ Returns license policy data for a user.
 
 ---
 
-### 5. setMinter
+### 6. setMinter
 
 Updates minter authorization.
 
@@ -206,14 +238,9 @@ Updates minter authorization.
 - `account` MUST NOT be zero address
 - Event SHOULD be emitted
 
-#### Notes
-
-- `isAuthorized = true` grants minting access
-- `isAuthorized = false` removes minting access
-
 ---
 
-### 6. isMinter
+### 7. isMinter
 
 Returns whether an account is an authorized minter.
 
@@ -233,7 +260,7 @@ Returns whether an account is an authorized minter.
 
 ---
 
-### 7. getPublisher
+### 8. getPublisher
 
 Returns canonical publisher address.
 
@@ -247,7 +274,7 @@ Returns canonical publisher address.
 
 ---
 
-### 8. getMetadataURI
+### 9. getMetadataURI
 
 Returns canonical metadata URI.
 
@@ -261,7 +288,7 @@ Returns canonical metadata URI.
 
 ---
 
-### 9. getGameId
+### 10. getGameId
 
 Returns canonical game identifier.
 
@@ -275,7 +302,7 @@ Returns canonical game identifier.
 
 ---
 
-### 10. setPublisher
+### 11. setPublisher
 
 Updates publisher address.
 
@@ -299,7 +326,7 @@ Updates publisher address.
 
 ---
 
-### 11. setMetadataURI
+### 12. setMetadataURI
 
 Updates metadata URI.
 
@@ -327,6 +354,7 @@ Updates metadata URI.
 
 | Function         | Access            |
 | ---------------- | ----------------- |
+| initialize       | Deployment only   |
 | mintLicense      | Authorized Minter |
 | hasLicense       | Public            |
 | canAccessGame    | Public            |
@@ -343,12 +371,15 @@ Updates metadata URI.
 
 ## Requirements
 
+- `initialize()` MUST set canonical `gameId`, `publisher`, and `metadataURI`
+- `initialize()` MUST only be executable once
 - `gameId` MUST be stored in PGC-1
 - `publisher` MUST be stored in PGC-1
 - `metadataURI` MUST be stored in PGC-1
 - `mintLicense()` MUST only be callable by authorized minters
 - `getPublisher()` MUST return the canonical publisher for the game
 - `getMetadataURI()` MUST return the canonical metadata URI for the game
+- `getGameId()` MUST return the canonical game identifier
 - `hasLicense(user)` MUST return `false` for expired licenses
 - `canAccessGame(user)` MUST return `false` for expired licenses
 - Licenses MUST remain non-transferable

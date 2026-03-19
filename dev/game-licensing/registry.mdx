@@ -19,6 +19,7 @@ Responsibilities:
 - Store PGC-1 contract address
 - Store game status
 - Enforce registration fee policy
+- Support trusted factory-based registration
 - Manage moderation and governance decisions
 - Provide game listing data for catalog and indexing
 
@@ -33,6 +34,7 @@ Registry does NOT store publisher, metadata, pricing, or ownership.
 | PGC-1      | Source of publisher and metadata |
 | Governance | Status control and fee policy    |
 | Treasury   | Registration fee receiver        |
+| Factory    | Trusted one-click game creation  |
 
 ---
 
@@ -62,6 +64,7 @@ Registry does NOT store publisher, metadata, pricing, or ownership.
 | -------------------- | ------------------------ | ------------------------------ |
 | governance           | address                  | Governance address             |
 | treasury             | address                  | Registration fee receiver      |
+| factory              | address                  | Trusted factory address        |
 | registrationFee      | uint256                  | Base registration fee          |
 | registrationFeeToken | address                  | Registration fee token address |
 | feeExemptions        | mapping(address => bool) | Free registration allowlist    |
@@ -75,7 +78,7 @@ Registry does NOT store publisher, metadata, pricing, or ownership.
 
 ### 1. registerGame
 
-Registers a new game in Registry.
+Registers a new game directly by publisher.
 
 `function registerGame(gameId, contractAddress)`
 
@@ -97,8 +100,9 @@ Registers a new game in Registry.
 #### Behavior
 
 - `publisher = PGC1(contractAddress).getPublisher()`
-- `gameId` MUST match `PGC1(contractAddress).getGameId()`
+- `canonicalGameId = PGC1(contractAddress).getGameId()`
 - `msg.sender` MUST equal `publisher`
+- `gameId` MUST match `canonicalGameId`
 - collect registration fee if required
 - send registration fee to treasury
 - store game data
@@ -107,7 +111,49 @@ Registers a new game in Registry.
 
 ---
 
-### 2. setStatus
+### 2. registerGameByFactory
+
+Registers a new game through trusted factory flow.
+
+`function registerGameByFactory(gameId, contractAddress, publisher)`
+
+#### Params
+
+| Name            | Type    | Description                 |
+| --------------- | ------- | --------------------------- |
+| gameId          | string  | Unique game identifier      |
+| contractAddress | address | PGC-1 contract address      |
+| publisher       | address | Canonical publisher address |
+
+#### Rules
+
+- Only trusted factory
+- `gameId` MUST be unique
+- `contractAddress` MUST NOT be zero address
+- `publisher` MUST NOT be zero address
+- Registration fee policy MUST still be enforced unless publisher is fee-exempt
+- Initial status MUST be `Pending`
+
+#### Behavior
+
+- `canonicalPublisher = PGC1(contractAddress).getPublisher()`
+- `canonicalGameId = PGC1(contractAddress).getGameId()`
+- `publisher` MUST match `canonicalPublisher`
+- `gameId` MUST match `canonicalGameId`
+- collect or verify registration fee settlement if required
+- send registration fee to treasury
+- store game data
+- append `gameId` to `allGameIds`
+- set `status = Pending`
+
+#### Notes
+
+- This function is intended for one-click Factory onboarding
+- Registration fee MAY be settled by Factory on behalf of publisher in the same transaction
+
+---
+
+### 3. setStatus
 
 Updates game status.
 
@@ -131,7 +177,7 @@ Updates game status.
 
 ---
 
-### 3. setAdmin
+### 4. setAdmin
 
 Updates admin status for an account.
 
@@ -152,7 +198,7 @@ Updates admin status for an account.
 
 ---
 
-### 4. setGovernance
+### 5. setGovernance
 
 Updates governance address.
 
@@ -172,7 +218,7 @@ Updates governance address.
 
 ---
 
-### 5. setTreasury
+### 6. setTreasury
 
 Updates treasury receiver address.
 
@@ -192,7 +238,27 @@ Updates treasury receiver address.
 
 ---
 
-### 6. setRegistrationFee
+### 7. setFactory
+
+Updates trusted factory address.
+
+`function setFactory(factory)`
+
+#### Params
+
+| Name    | Type    | Description             |
+| ------- | ------- | ----------------------- |
+| factory | address | Trusted factory address |
+
+#### Rules
+
+- Only governance
+- `factory` MUST NOT be zero address
+- Event SHOULD be emitted
+
+---
+
+### 8. setRegistrationFee
 
 Updates registration fee configuration.
 
@@ -213,7 +279,7 @@ Updates registration fee configuration.
 
 ---
 
-### 7. setFeeExemption
+### 9. setFeeExemption
 
 Updates fee exemption status for a publisher or studio.
 
@@ -239,7 +305,7 @@ Updates fee exemption status for a publisher or studio.
 
 ---
 
-### 8. getGame
+### 10. getGame
 
 Returns full game data.
 
@@ -261,7 +327,7 @@ Returns full game data.
 
 ---
 
-### 9. getAllGames
+### 11. getAllGames
 
 Returns all registered games.
 
@@ -280,7 +346,7 @@ Returns all registered games.
 
 ---
 
-### 10. getContractAddress
+### 12. getContractAddress
 
 Returns PGC-1 contract address for a game.
 
@@ -300,7 +366,7 @@ Returns PGC-1 contract address for a game.
 
 ---
 
-### 11. getStatus
+### 13. getStatus
 
 Returns current game status.
 
@@ -320,7 +386,7 @@ Returns current game status.
 
 ---
 
-### 12. getGovernance
+### 14. getGovernance
 
 Returns governance address.
 
@@ -334,7 +400,7 @@ Returns governance address.
 
 ---
 
-### 13. getTreasury
+### 15. getTreasury
 
 Returns treasury receiver address.
 
@@ -348,7 +414,21 @@ Returns treasury receiver address.
 
 ---
 
-### 14. getRegistrationFee
+### 16. getFactory
+
+Returns trusted factory address.
+
+`function getFactory()`
+
+#### Returns
+
+| Type    | Description     |
+| ------- | --------------- |
+| address | Factory address |
+
+---
+
+### 17. getRegistrationFee
 
 Returns current registration fee configuration.
 
@@ -363,7 +443,7 @@ Returns current registration fee configuration.
 
 ---
 
-### 15. isFeeExempt
+### 18. isFeeExempt
 
 Returns whether an account is exempt from registration fee.
 
@@ -383,7 +463,7 @@ Returns whether an account is exempt from registration fee.
 
 ---
 
-### 16. isAdmin
+### 19. isAdmin
 
 Returns whether an account has admin access.
 
@@ -405,24 +485,27 @@ Returns whether an account has admin access.
 
 ## Access Control
 
-| Function           | Access     |
-| ------------------ | ---------- |
-| registerGame       | Publisher  |
-| setStatus          | Admin      |
-| setAdmin           | Governance |
-| setGovernance      | Governance |
-| setTreasury        | Governance |
-| setRegistrationFee | Governance |
-| setFeeExemption    | Governance |
-| getGame            | Public     |
-| getAllGames        | Public     |
-| getContractAddress | Public     |
-| getStatus          | Public     |
-| getGovernance      | Public     |
-| getTreasury        | Public     |
-| getRegistrationFee | Public     |
-| isFeeExempt        | Public     |
-| isAdmin            | Public     |
+| Function              | Access     |
+| --------------------- | ---------- |
+| registerGame          | Publisher  |
+| registerGameByFactory | Factory    |
+| setStatus             | Admin      |
+| setAdmin              | Governance |
+| setGovernance         | Governance |
+| setTreasury           | Governance |
+| setFactory            | Governance |
+| setRegistrationFee    | Governance |
+| setFeeExemption       | Governance |
+| getGame               | Public     |
+| getAllGames           | Public     |
+| getContractAddress    | Public     |
+| getStatus             | Public     |
+| getGovernance         | Public     |
+| getTreasury           | Public     |
+| getFactory            | Public     |
+| getRegistrationFee    | Public     |
+| isFeeExempt           | Public     |
+| isAdmin               | Public     |
 
 ---
 
@@ -431,7 +514,10 @@ Returns whether an account has admin access.
 - Every `gameId` MUST be unique
 - Every registered game MUST have a valid `contractAddress`
 - `PGC-1` MUST implement `getPublisher()`
-- `msg.sender` MUST match `PGC-1.getPublisher()` during registration
+- `PGC-1` MUST implement `getGameId()`
+- `gameId` MUST match `PGC-1.getGameId()`
+- Direct registration MUST require `msg.sender == PGC-1.getPublisher()`
+- Factory registration MUST require `publisher == PGC-1.getPublisher()`
 - Banned games MUST remain queryable
 - Registry MUST act as source of truth for game validity
 - Registration fee policy MUST be enforced during registration
